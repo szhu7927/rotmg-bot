@@ -1,4 +1,7 @@
-import pyautogui, logging, cv2, time
+import pyautogui, logging, time
+import numpy as np
+import cv2 as cv
+from PIL import ImageGrab
 
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s.%(msecs)03d: %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
@@ -11,12 +14,6 @@ import os
 
 # Global variables
 GAME_REGION = ()
-
-class Enemy():
-    def __init__(self, name, var, coords):
-        self.name = name
-        self.var = var
-        self.coords = None
 
 def main():
     logger.debug('Program Started. Press Ctrl-C to abort at any time.')
@@ -32,7 +29,7 @@ def getGameRegion():
 
     # identify the identifier
     logger.debug('Finding game region...')
-    region = pyautogui.locateOnScreen(imPath('player_icon.png'), confidence=.95)
+    region = pyautogui.locateOnScreen(imPath('player_icon.png'), confidence=.9)
     if region is None:
         raise Exception('Could not find game on screen. Is the game visible?')
 
@@ -44,20 +41,35 @@ def getGameRegion():
 
 def play():
     logger.debug('Looking for enemies...')
-    hobbit_archer = Enemy('Hobbit Archer', 'hobbit_archer', None)
-    snake = Enemy('Snake', 'snake', None)
-    pirate = Enemy('Pirate', 'pirate', None)
-    bandit = Enemy('Bandit', 'bandit', None)
 
-    enemies = [hobbit_archer, snake, pirate, bandit]
+    lower_green = (0, 254, 16)
+    upper_green = (1, 255, 17)
+    lower_orange = (15, 127, 254)
+    upper_orange = (16, 128, 255)
+    lower_red = (15, 15, 223)
+    upper_red = (16, 16, 224)
+
     while True:
-        for i in range(len(enemies)):
-            enemies[i].coords = pyautogui.locateCenterOnScreen(imPath('%s.png' % enemies[i].var), region=GAME_REGION, confidence=.65)
-            if enemies[i].coords is not None:
-                logger.debug('Enemy found: ' + enemies[i].name + ' at %s' % (enemies[i].coords,))
-                pyautogui.mouseDown(enemies[i].coords)
-                time.sleep(1)
-                pyautogui.mouseUp()
+        screenshot = ImageGrab.grab(bbox=GAME_REGION)
+        screenshot = np.array(screenshot)
+        screenshot = screenshot[:, :, ::-1].copy()
+
+        mask_green = cv.inRange(screenshot, lower_green, upper_green)
+        mask_orange = cv.inRange(screenshot, lower_orange, upper_orange)
+        mask_red = cv.inRange(screenshot, lower_red, upper_red)
+        mask = cv.add(mask_green, mask_orange)
+        mask = cv.add(mask, mask_red)
+
+        cnt, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+
+        for rect in cnt:
+            M = cv.moments(rect)
+            if M['m00'] != 0:
+                centroid_x = int(M['m10']/M['m00'])
+                centroid_y = int(M['m01']/M['m00'])
+
+                if centroid_x < 1190 and centroid_y > 30:
+                    pyautogui.click(GAME_REGION[0] + centroid_x + 10, GAME_REGION[1] + centroid_y - 30)
 
 if __name__ == '__main__':
     main()
