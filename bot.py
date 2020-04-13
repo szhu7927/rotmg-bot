@@ -2,6 +2,7 @@ import pyautogui, logging, time
 import numpy as np
 import cv2 as cv
 from PIL import ImageGrab
+from objectidentification import *
 
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s.%(msecs)03d: %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
@@ -14,6 +15,12 @@ import os
 
 # Global variables
 GAME_REGION = ()
+PLAYER_CENTER = ()
+GREEN_HEALTH = [(0, 254, 16), (1, 255, 17)]
+ORANGE_HEALTH = [(15, 127, 254), (16, 128, 255)]
+RED_HEALTH = [(15, 15, 223), (16, 16, 224)]
+HEALTH = [GREEN_HEALTH, ORANGE_HEALTH, RED_HEALTH]
+GHOST_GOD = [[(242, 242, 242), (243, 243, 243)], [(160, 160, 160), (161, 161, 161)]]
 
 def main():
     logger.debug('Program Started. Press Ctrl-C to abort at any time.')
@@ -36,40 +43,27 @@ def getGameRegion():
     # calculate game region
     topLeftX = region[0]
     topLeftY = region[1]
-    GAME_REGION = (topLeftX - 1104, topLeftY - 295, 1200, 900)
+    gameRegionTopLeftX = topLeftX - 1104
+    gameRegionTopLeftY = topLeftY - 295
+    GAME_REGION = (gameRegionTopLeftX, gameRegionTopLeftY, gameRegionTopLeftX + 1200, gameRegionTopLeftY + 900)
+    PLAYER_CENTER = (topLeftX + 455, topLeftY + 460)
     logger.debug('Game region found: %s' % (GAME_REGION,))
 
 def play():
-    logger.debug('Looking for enemies...')
+    global HEALTH
 
-    lower_green = (0, 254, 16)
-    upper_green = (1, 255, 17)
-    lower_orange = (15, 127, 254)
-    upper_orange = (16, 128, 255)
-    lower_red = (15, 15, 223)
-    upper_red = (16, 16, 224)
+    logger.debug('Looking for enemies...')
 
     while True:
         screenshot = ImageGrab.grab(bbox=GAME_REGION)
+        print(screenshot)
         screenshot = np.array(screenshot)
+        #print(screenshot)
         screenshot = screenshot[:, :, ::-1].copy()
 
-        mask_green = cv.inRange(screenshot, lower_green, upper_green)
-        mask_orange = cv.inRange(screenshot, lower_orange, upper_orange)
-        mask_red = cv.inRange(screenshot, lower_red, upper_red)
-        mask = cv.add(mask_green, mask_orange)
-        mask = cv.add(mask, mask_red)
-
-        cnt, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
-
-        for rect in cnt:
-            M = cv.moments(rect)
-            if M['m00'] != 0:
-                centroid_x = int(M['m10']/M['m00'])
-                centroid_y = int(M['m01']/M['m00'])
-
-                if centroid_x < 1190 and centroid_y > 30:
-                    pyautogui.click(GAME_REGION[0] + centroid_x + 10, GAME_REGION[1] + centroid_y - 30)
+        healthCnts = getCnts(screenshot, HEALTH)
+        aimbot(healthCnts, GAME_REGION, 10, -30)
+        #explore()
 
 if __name__ == '__main__':
     main()
